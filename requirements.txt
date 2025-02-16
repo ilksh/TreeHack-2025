@@ -1,0 +1,9 @@
+yfinance
+numpy
+pandas
+matplotlib
+gudhi
+scipy
+networkx
+scikit-learn
+qiskit
