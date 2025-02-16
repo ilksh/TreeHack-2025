@@ -1,32 +1,44 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 from groq import Groq
 from dotenv import load_dotenv
 import elastic_db as db
 import os
 import uvicorn
 
+# Load environment variables
 load_dotenv()
-
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-groq_client = Groq(
-    api_key=GROQ_API_KEY,
-)
+# Initialize Groq LLM client
+groq_client = Groq(api_key=GROQ_API_KEY)
 
 app = FastAPI()
 
-# Pass ticker
-# return: actual prices(price array) and predicted prices(array)
-@app.get("/api/datapoints")
-def get_data_points(ticker):
-    return {[], []}
+# Request body model
+class ChatRequest(BaseModel):
+    messages: list
 
-# pass ticker and user info
-# return response
-@app.get("/api/analysis")
-def get_response(ticker):
+@app.post("/api/chat")
+async def chat(request: ChatRequest):
 
-    documents_string = db.search_documents(prompt)
+    if not request.messages:
+        raise HTTPException(status_code=400, detail="No messages provided")
+
+    user_input = request.messages[-1]["content"]
+
+    company, ticker = db.gather_info(user_input)
+
+    documents_string = db.search_documents(user_input, company, ticker)
+
+    algo_data = ""
+    if ticker:
+        try:
+            algo_data = db.get_forecast(ticker)
+        except:
+            pass
+
+    user_info = "The user is a 23 year old novice investor.\n"
 
     system_prompt = documents_string + algo_data + user_info + """\n
 
@@ -38,27 +50,38 @@ def get_response(ticker):
 
     """
 
-    chat_completion = groq_client.chat.completions.create(
-        messages=[
-            {
-                "role": "system",
-                "content": system_prompt
-            },
-        ],
-        model="deepseek-r1-distill-llama-70b",
-    )
+    try:
+        chat_completion = groq_client.chat.completions.create(
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_prompt
+                },
+                {
+                    "role": "user",
+                    "content": user_input
+                },
+            ],
+            model="deepseek-r1-distill-llama-70b",
+        )
 
-    return response
+        response_text = chat_completion.choices[0].message.content
 
-# pass ticker and user info and prompt
-# return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Groq API Error: {str(e)}")
+
+    print(response_text)
+
+    return {"response": response_text}
+
+# Dummy endpoints (if needed)
+@app.get("/api/datapoints")
+def get_data_points(ticker: str):
+    return {[], []}  
+
 @app.get("/api/prompt")
-def get_response(ticker):
+def get_prompt_response(ticker: str):
     return "dummy response for prompt call"
 
-# 5 articles
-# user info
-# data points
-# system prompt
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000, reload=False)
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

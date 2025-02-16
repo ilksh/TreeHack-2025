@@ -15,9 +15,9 @@ def get_response(prompt):
 
     documents_string = db.search_documents(prompt)
 
-    algo_data = "Data currently unavailable\n"
+    algo_data = db.get_forecast()
 
-    user_info = "The user is a 9 year old wanting to learn.\n"
+    user_info = "The user is a 23 year old novice investor.\n"
 
     system_prompt = documents_string + algo_data + user_info + """\n
 
@@ -28,6 +28,8 @@ def get_response(prompt):
         it. Finally, ensure all your answers align in complexity with the given age group of the user.
 
     """
+
+    print(system_prompt)
 
     chat_completion = groq_client.chat.completions.create(
         messages=[

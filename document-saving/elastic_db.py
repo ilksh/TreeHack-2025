@@ -45,9 +45,46 @@ mapping = {
 if not es.indices.exists(index=index_name):
     es.indices.create(index=index_name, body=mapping)
 
+def gather_info(prompt):
+    
+    company = ""
+    ticker = ""
+
+    doc = nlp(prompt)
+    for ent in doc.ents:
+        if ent.label_ == "ORG":
+            company = ent.text
+
+            df = pd.read_csv("tickers/constituents.csv")
+            
+            row = df.loc[df["Security"] == company, "Symbol"]
+    
+            if not row.empty:
+                ticker = row.values[0]
+
+    return (company, ticker)
+
+
+def get_forecast(ticker):
+
+    with open("updated_stock_predictions.json", "r") as file:
+        data = json.load(file)
+
+    initial = data[ticker]["Training Data (Actual)"][-1]
+    prediction = data[ticker]["Predicted Future Prices"]
+    average = sum(prediction) / len(prediction) if prediction else 0
+
+    final = average - initial
+
+    if final < 0:
+        return "Our quantum computing algorithm predicts a {final} point decrease in the {ticker} stock."
+    else:
+        return "Our quantum computing algorithm predicts a {final} point increase in the {ticker} stock."
+
+
 def load_documents():
 
-    df = pd.read_csv("constituents.csv")
+    df = pd.read_csv("tickers/constituents.csv")
 
     for symbol in df["Symbol"]:
 
@@ -63,14 +100,7 @@ def load_documents():
             es.index(index=index_name, id=doc_id, body=obj)
 
 
-def search_documents(prompt):
-
-    company = None
-
-    doc = nlp(prompt)
-    for ent in doc.ents:
-        if ent.label_ == "ORG":
-            company = ent.text
+def search_documents(prompt, company, ticker):
 
     chat_completion = groq_client.chat.completions.create(
         messages=[
@@ -89,7 +119,7 @@ def search_documents(prompt):
     )
 
     if chat_completion.choices[0].message.content == "NO RAG":
-        return None
+        return ""
 
     print(chat_completion.choices[0].message.content)
 
@@ -101,7 +131,7 @@ def search_documents(prompt):
     query_vector = response.data[0].embedding
 
     search_query = {
-        "size": 5,
+        "size": 10,
         "query": {
             "script_score": {
                 "query": {"match_all": {}},
@@ -114,9 +144,7 @@ def search_documents(prompt):
     }
 
     if company:
-        search_query["query"]["script_score"]["query"] = {"match": {"company_name": company}}
-    # else:
-        # search_query["query"]["script_score"]["query"] = {"match_all": {}}
+        search_query["query"]["script_score"]["query"] = {"match": {"company_name": company}} #######################################################
 
     search_response = es.search(index=index_name, body=search_query)
 
@@ -129,7 +157,8 @@ def search_documents(prompt):
 
 def main():
     # load_documents()
-    search_documents("How is AbbVie Inc doing in the news?")
+    get_forecast()
+    # search_documents("How is AbbVie Inc doing in the news?")
 
 if __name__ == "__main__":
     main()
