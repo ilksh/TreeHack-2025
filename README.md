@@ -1,4 +1,4 @@
-# Tradelingo: Hedge Fund at Your Fingertip
+# Tradelingo: Hedge Fund at Your Fingertips
 
 ## Overview  
 Tradelingo is an AI-powered financial intelligence platform that leverages **quantum computing and deep learning** to provide highly accurate stock market predictions and risk assessments.  
